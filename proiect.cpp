@@ -6,86 +6,96 @@
 #include <syslog.h>
 #include <signal.h>
 #include <dirent.h>
-#include <string.h>
+#include <cstring>
 #include <errno.h>
+#include <unordered_map>
+#include <string>
+#include <iostream>
 
-
-int afiseaza_copii(const char *directory_path)
+struct dateHash
 {
-    DIR *dir;
-    struct dirent *entry;
+    unsigned long long id, size, modified;
+};
 
-    dir = opendir(directory_path);
+std::unordered_map <const char*, dateHash> cache;
 
-    if (dir == NULL) 
-    {
-        perror("Error opening directory");
-        return 1;
-    }
+unsigned long long job_ID;
 
-    while ((entry = readdir(dir)) != NULL) 
-        printf("%s\n", entry->d_name);
-
-    closedir(dir);
-    return 0;
-}
-
-//long long countFiles()
-
-long long calculateFolderSize(const char *folderPath)
+long long calculateFolderSize(const char* folderPath)
 {
     DIR *dir;
     struct dirent *entry;
     struct stat statBuf;
-    long long totalSize = 0;
+    long long totalSize = 0, size = 0;
 
-    // Open the directory
     if ((dir = opendir(folderPath)) == NULL)
     {
         perror("opendir");
         exit(EXIT_FAILURE);
     }
 
-    // Iterate through each entry in the directory
-    while ((entry = readdir(dir)) != NULL)
+    if (stat(folderPath, &statBuf) == -1)
+        perror("stat");
+
+    if (cache[folderPath].modified != statBuf.st_mtime)
     {
-        // Skip "." and ".." entries
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            continue;
+        std::cout << folderPath << '\n';
+        std::cout << cache[folderPath].id << ' ';
+        cache[folderPath].id = ++job_ID;
+        std::cout << cache[folderPath].id << '\n' << cache[folderPath].modified << ' ' << statBuf.st_mtime << '\n';
 
-        // Construct the full path of the file
-        char filePath[PATH_MAX];
-        snprintf(filePath, sizeof(filePath), "%s/%s", folderPath, entry->d_name);
+        cache[folderPath].modified = statBuf.st_mtime;
+        std::cout << cache[folderPath].modified << '\n';
+        cache[folderPath].size = 0;
 
-        // Get information about the file
-        if (stat(filePath, &statBuf) == -1)
+        // Iterate through each entry in the directory
+        while ((entry = readdir(dir)) != NULL)
         {
-            perror("stat");
-            continue;  // Skip to the next entry if stat fails
+            // Skip "." and ".." entries
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+                continue;
+
+            // Construct the full path of the file
+            char filePath[PATH_MAX];
+            snprintf(filePath, sizeof(filePath), "%s/%s", folderPath, entry->d_name);
+
+            // Get information about the file
+            if (stat(filePath, &statBuf) == -1)
+            {
+                perror("stat");
+                continue;  // Skip to the next entry if stat fails
+            }
+
+            // Regular file or shortcut file
+            if (S_ISREG(statBuf.st_mode) || S_ISLNK(statBuf.st_mode))
+            {
+                size += statBuf.st_size;
+            }
+
+            else if (S_ISDIR(statBuf.st_mode))
+            {
+                char dirPath[PATH_MAX];
+                snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
+                size += calculateFolderSize(dirPath);
+            }
         }
 
-        // Check if the entry is a regular file
-        if (S_ISREG(statBuf.st_mode))
-        {
-            // Accumulate the size of the file
-            totalSize += statBuf.st_size;
-        }
-        else
-        {
-            char dirPath[PATH_MAX];
-            snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
-            totalSize += calculateFolderSize(dirPath);
-        }
+        cache[folderPath].size = size;
+    }
+    else
+    {
+        std::cout << " precalculat" << folderPath  << "\n";
+        size = cache[folderPath].size;
     }
 
-    // Close the directory
+    totalSize += size;
+
     closedir(dir);
 
     return totalSize;
 }
 
-
-pair<int, int> getFolderItemCount(const char *folderPath)
+std::pair<int, int> getFolderItemCount(const char *folderPath)
 {
     DIR *dir;
     int nr_foldere=0, nr_fisiere=0;
@@ -118,8 +128,8 @@ pair<int, int> getFolderItemCount(const char *folderPath)
                   
                 snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
                 
-                   cout << "\n" << entry->d_name << " : ";
-                pair<int, int> aux = getFolderItemCount(dirPath);
+                std::cout << "\n" << entry->d_name << " : ";
+                std::pair<int, int> aux = getFolderItemCount(dirPath);
                 
                 nr_foldere += aux.first;
                 nr_fisiere += aux.second;
@@ -127,7 +137,7 @@ pair<int, int> getFolderItemCount(const char *folderPath)
             else{
                 if(S_ISREG(statBuf.st_mode))
                 {
-                    cout << entry->d_name << ", ";
+                    std::cout << entry->d_name << ", ";
                     nr_fisiere++;
                 }
             }
@@ -136,93 +146,29 @@ pair<int, int> getFolderItemCount(const char *folderPath)
 
     // Close the directory
     closedir(dir);
-    cout << '\n';
+    std::cout << '\n';
 
-    return make_pair(nr_foldere, nr_fisiere);
+    return std::make_pair(nr_foldere, nr_fisiere);
 }
 
 
-void outputCurrentFolderPath() 
+
+void outputCurrentFolderPath()
 {
     char cwd[PATH_MAX];
 
-    if (getcwd(cwd, sizeof(cwd)) != NULL) 
+    if (getcwd(cwd, sizeof(cwd)) != NULL)
         printf("Current working directory: %s\n", cwd);
-    else 
+    else
     {
         perror("getcwd");
         exit(EXIT_FAILURE);
     }
 }
 
-/*
-int parcurgere_dir(const char *directory_path)
-{
-     DIR *dir;
-    struct dirent *entry;
-
-    dir = opendir(directory_path);
-
-    if (dir == NULL) {
-        perror("Error opening directory");
-        return 1;
-    }
-
-    while ((entry = readdir(dir)) != NULL) {
-        parcurgere_dir(const char *directory_path);
-    }
-}
-*/
-/*
-int main(int argc, char *argv[])
-{
-    pid_t pid;
-
-    //Ne despartim de procesul de baza
-    pid = fork();
-
-    if (pid < 0)
-        return errno;
-    if (pid > 0) {
-        exit(EXIT_SUCCESS);
-    }
-
-    // Step 4: Set a new session
-    if (setsid() < 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    // Step 5: Change the current working directory to the root
-    chdir("/");
-
-    // Step 6: Close Standard File Descriptors
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-
-    // Daemon specific action
-    while (1) {
-
-
-        char buffer[100];
-        fgets(buffer, sizeof(buffer), stdin);
-
-        if (buffer != NULL)
-        {
-
-        }
-
-        time_t now = time(NULL);
-        sleep(5); // The daemon works every 5 seconds
-    }
-
-    return EXIT_SUCCESS;
-}
-
-*/
-
 int main()
 {
-    const char *s = "/mnt/c/Users/Lida Rani/dir/";
-    printf("%lld\n", calculateFolderSize(s));
+    const char* s = "/mnt/c/Users/Lida Rani/dir/proiect/", *t = "/mnt/c/Users/Lida Rani/dir/", *p = "/mnt/c/Users/Lida Rani/dir/test";
+    calculateFolderSize(s), calculateFolderSize(p);
+    std::cout << calculateFolderSize(t) << '\n';
 }
