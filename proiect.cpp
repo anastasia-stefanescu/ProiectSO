@@ -84,6 +84,64 @@ long long calculateFolderSize(const char *folderPath)
     return totalSize;
 }
 
+
+pair<int, int> getFolderItemCount(const char *folderPath)
+{
+    DIR *dir;
+    int nr_foldere=0, nr_fisiere=0;
+    struct stat statBuf;
+    struct dirent *entry;
+
+    if ((dir = opendir(folderPath)) == NULL)
+    {
+        perror("opendir");
+        exit(EXIT_FAILURE);
+    }
+
+    while ((entry = readdir(dir)) != NULL)
+    {
+        // Skip "." and ".." entries
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        // Construct the full path of the file
+        char filePath[PATH_MAX];
+        snprintf(filePath, sizeof(filePath), "%s/%s", folderPath, entry->d_name);
+        if(stat(filePath, &statBuf) == -1)
+            perror("stat");
+
+            if(S_ISDIR(statBuf.st_mode))
+               {
+                   
+                char dirPath[PATH_MAX];
+                nr_foldere++;
+                  
+                snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
+                
+                   cout << "\n" << entry->d_name << " : ";
+                pair<int, int> aux = getFolderItemCount(dirPath);
+                
+                nr_foldere += aux.first;
+                nr_fisiere += aux.second;
+            }
+            else{
+                if(S_ISREG(statBuf.st_mode))
+                {
+                    cout << entry->d_name << ", ";
+                    nr_fisiere++;
+                }
+            }
+    }
+    
+
+    // Close the directory
+    closedir(dir);
+    cout << '\n';
+
+    return make_pair(nr_foldere, nr_fisiere);
+}
+
+
 void outputCurrentFolderPath() 
 {
     char cwd[PATH_MAX];
