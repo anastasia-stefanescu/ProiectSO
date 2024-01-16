@@ -32,7 +32,11 @@ void initialize_cache(const char* folderPath,  struct stat statBuf)
     cout << folderPath << '\n';
     
     job_ID++;
-    cache[folderPath] = {job_ID, 0, static_cast<unsigned long long>(statBuf.st_mtime), 0, 0, 0, 1, folderPath};
+    cache[folderPath].id = job_ID;
+    //cache[folderPath].size = 0;
+    cache[folderPath].modified =statBuf.st_mtime;
+    cache[folderPath].stare =  1;
+    
 }
 
 dateHash calculateFolderSize(const char* folderPath)
@@ -84,8 +88,10 @@ dateHash calculateFolderSize(const char* folderPath)
             {
                 char dirPath[PATH_MAX];
                 snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
+                cache[dirPath].start_folder = cache[folderPath].start_folder;
                 dateHash aux = calculateFolderSize(dirPath);
                 size += aux.size;
+                fisiere_verif += aux.fisiere_verif;
                 //fisiere_verif += aux.fisiere_verif;
                 //nr_fisiere += aux.nr_fisiere;
                 //nr_foldere += aux.nr_foldere;
@@ -93,7 +99,7 @@ dateHash calculateFolderSize(const char* folderPath)
             }
         }
         cache[folderPath].size = size;
-        //cache[folderPath].fisiere_verif = fisiere_verif;
+        cache[folderPath].fisiere_verif = fisiere_verif;
         //cache[folderPath].nr_fisiere = nr_fisiere;
         //cache[folderPath].nr_foldere = nr_foldere;
     }
@@ -102,9 +108,6 @@ dateHash calculateFolderSize(const char* folderPath)
         std::cout << " precalculat" << folderPath  << "\n";
         //cache[start_folder].fisiere_verif += cache[folderPath].fisiere_verif;
     }
-
-    totalSize += size;
-    //totalFisiere += fisiere_verif;
 
     closedir(dir);
 
@@ -155,6 +158,7 @@ dateHash countItemsFolder(const char *folderPath)
                 //cout << "\n" << entry->d_name << " : ";
                 snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
                 
+                cache[dirPath].start_folder = cache[folderPath].start_folder;
                 dateHash aux = countItemsFolder(dirPath);
                 
                 nr_foldere += aux.nr_foldere;
@@ -174,7 +178,6 @@ dateHash countItemsFolder(const char *folderPath)
     cache[folderPath].nr_foldere = nr_foldere;
     cache[folderPath].nr_fisiere = nr_fisiere;
     cache[folderPath].fisiere_verif = nr_verif;
-    cache[cache[folderPath].start_folder].fisiere_verif += nr_verif;
 
     // Close the directory
     closedir(dir);
@@ -203,15 +206,15 @@ void StartTask(const char *folderPath)
 
 int main()
 {
-    const char *s1 = "/Users/anastasiastefanescu/Documents/uf";
-    const char *s2= "/Users/anastasiastefanescu/Documents/uf/uf2";
+    const char *s1 = "/Users/anastasiastefanescu/Documents/SO";
+    const char *s2= "/Users/anastasiastefanescu/Documents";
    
     //printf("%lld foldere, %lld fisiere \n", getFolderItemCount(s).first, getFolderItemCount(s).second);
     //printf("\n %lf GB \n", calculateFolderSize(s)/1000000);
     
     StartTask(s2);
     
-    Progress(s1);
+    Progress(s2);
     
     StartTask(s1);
     
