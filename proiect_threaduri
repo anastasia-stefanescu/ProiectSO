@@ -383,13 +383,13 @@ void StartTask(const char *folderPath)
     cache[folderPath].id_job= ++job_id;
     
     //aici pe threaduri separate
-    if (pthread_create(&cache[folderPath].thrd_count, NULL, countItemsFolder, (void*)folderPath) != 0)
+    if (pthread_create(&cache[folderPath].thrd_count, NULL, countItemsFolder, (void*)folderPath))
     {
         perror(NULL);
         return;
     }
     
-    if (pthread_create(&cache[folderPath].thrd_size, NULL, calculateFolderSize, (void*)folderPath) != 0)
+    if (pthread_create(&cache[folderPath].thrd_size, NULL, calculateFolderSize, (void*)folderPath))
         {
             perror(NULL);
             return;
