@@ -246,9 +246,9 @@ void resultAnalysis(const char* folderPath)
         {
             cout << "|-/" << aux << " ";
             double proc = ((double) cache[folderPath].size) /  cache[cache[folderPath].start_folder].size;
-            cout << setprecision(8) << proc * 100  << "% ";
+            cout << setprecision(2) << proc * 100  << "% ";
             double nr_mb = ((double) cache[folderPath].size) / 1000000;
-            cout << setprecision(8) << nr_mb << " MB ";
+            cout << setprecision(2) << nr_mb << " MB ";
             
             int nr_units = (int) (cache[folderPath].size / cache[cache[folderPath].start_folder].min_folder_size);
             for (int i = 1; i<= nr_units; i++)
@@ -288,7 +288,7 @@ void startAnalysis(const char* folderPath)
     cout << "\n Path                 Usage       Size         Amount \n";
     cout << folderPath << " 100% ";
     double nr_mb = ((double) cache[folderPath].size) / 1000000;
-    cout << setprecision(8) << nr_mb << " MB ";
+    cout << setprecision(2) << nr_mb << " MB ";
     
     int nr_units = (int) (cache[folderPath].size / cache[folderPath].min_folder_size);
     cache[folderPath].nr_units = nr_units;
