@@ -6,26 +6,43 @@
 #include <syslog.h>
 #include <signal.h>
 #include <dirent.h>
-#include <cstring>
+#include <string.h>
 #include <errno.h>
-#include <unordered_map>
-#include <string>
+#include <limits.h>
+#include <utility>
 #include <iostream>
+using namespace std;
 
 struct dateHash
 {
     unsigned long long id, size, modified;
+    int fisiere_verif, nr_foldere, nr_fisiere;
+    int stare; // -1- terminat, 0, pauza, 1, in progres
+    const char* start_folder;
 };
 
-std::unordered_map <const char*, dateHash> cache;
+std::unordered_map <string, dateHash> cache;
+
+//vector <string>
 
 unsigned long long job_ID;
 
-long long calculateFolderSize(const char* folderPath)
+void initialize_cache(const char* folderPath,  struct stat statBuf)
+{
+    cout << folderPath << '\n';
+    
+    job_ID++;
+    cache[folderPath] = {job_ID, 0, static_cast<unsigned long long>(statBuf.st_mtime), 0, 0, 0, 1, folderPath};
+}
+
+dateHash calculateFolderSize(const char* folderPath)
 {
     DIR *dir;
     struct dirent *entry;
     struct stat statBuf;
+    int fisiere_verif = 0, totalFisiere_verif=0;
+    //int nr_foldere = 0, totalFoldere = 0;
+    //int nr_fisiere =0, totalFisiere = 0;
     long long totalSize = 0, size = 0;
 
     if ((dir = opendir(folderPath)) == NULL)
@@ -39,23 +56,13 @@ long long calculateFolderSize(const char* folderPath)
 
     if (cache[folderPath].modified != statBuf.st_mtime)
     {
-        std::cout << folderPath << '\n';
-        std::cout << cache[folderPath].id << ' ';
-        cache[folderPath].id = ++job_ID;
-        std::cout << cache[folderPath].id << '\n' << cache[folderPath].modified << ' ' << statBuf.st_mtime << '\n';
+        initialize_cache(folderPath, statBuf);
 
-        cache[folderPath].modified = statBuf.st_mtime;
-        std::cout << cache[folderPath].modified << '\n';
-        cache[folderPath].size = 0;
-
-        // Iterate through each entry in the directory
         while ((entry = readdir(dir)) != NULL)
         {
-            // Skip "." and ".." entries
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
 
-            // Construct the full path of the file
             char filePath[PATH_MAX];
             snprintf(filePath, sizeof(filePath), "%s/%s", folderPath, entry->d_name);
 
@@ -66,39 +73,49 @@ long long calculateFolderSize(const char* folderPath)
                 continue;  // Skip to the next entry if stat fails
             }
 
-            // Regular file or shortcut file
             if (S_ISREG(statBuf.st_mode) || S_ISLNK(statBuf.st_mode))
             {
                 size += statBuf.st_size;
+                fisiere_verif++;
+                //nr_fisiere++;
+                cache[cache[folderPath].start_folder].fisiere_verif++;
             }
-
             else if (S_ISDIR(statBuf.st_mode))
             {
                 char dirPath[PATH_MAX];
                 snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
-                size += calculateFolderSize(dirPath);
+                dateHash aux = calculateFolderSize(dirPath);
+                size += aux.size;
+                //fisiere_verif += aux.fisiere_verif;
+                //nr_fisiere += aux.nr_fisiere;
+                //nr_foldere += aux.nr_foldere;
+                //cache[start_folder].fisiere_verif += aux.fisiere_verif;
             }
         }
-
         cache[folderPath].size = size;
+        //cache[folderPath].fisiere_verif = fisiere_verif;
+        //cache[folderPath].nr_fisiere = nr_fisiere;
+        //cache[folderPath].nr_foldere = nr_foldere;
     }
     else
     {
         std::cout << " precalculat" << folderPath  << "\n";
-        size = cache[folderPath].size;
+        //cache[start_folder].fisiere_verif += cache[folderPath].fisiere_verif;
     }
 
     totalSize += size;
+    //totalFisiere += fisiere_verif;
 
     closedir(dir);
 
-    return totalSize;
+    return cache[folderPath];
 }
 
-std::pair<int, int> getFolderItemCount(const char *folderPath)
+
+dateHash countItemsFolder(const char *folderPath)
 {
     DIR *dir;
-    int nr_foldere=0, nr_fisiere=0;
+    int nr_foldere=0, nr_fisiere=0, nr_verif = 0;
     struct stat statBuf;
     struct dirent *entry;
 
@@ -107,68 +124,101 @@ std::pair<int, int> getFolderItemCount(const char *folderPath)
         perror("opendir");
         exit(EXIT_FAILURE);
     }
+    
+    if (stat(folderPath, &statBuf) == -1)
+        perror("stat");
 
-    while ((entry = readdir(dir)) != NULL)
+    if (cache[folderPath].modified != statBuf.st_mtime)
     {
-        // Skip "." and ".." entries
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            continue;
-
-        // Construct the full path of the file
-        char filePath[PATH_MAX];
-        snprintf(filePath, sizeof(filePath), "%s/%s", folderPath, entry->d_name);
-        if(stat(filePath, &statBuf) == -1)
-            perror("stat");
-
-            if(S_ISDIR(statBuf.st_mode))
-               {
-                   
+        //aici nu punem ca fi modificat, doar in CalculateSize
+        
+        while ((entry = readdir(dir)) != NULL)
+        {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+                continue;
+            
+            char filePath[PATH_MAX];
+            snprintf(filePath, sizeof(filePath), "%s/%s", folderPath, entry->d_name);
+            if(stat(filePath, &statBuf) == -1)
+                perror("stat");
+            
+            if (S_ISREG(statBuf.st_mode) || S_ISLNK(statBuf.st_mode))
+            {
+                //cout << entry->d_name << ", ";
+                nr_fisiere++;
+            }
+            else
+            {
                 char dirPath[PATH_MAX];
                 nr_foldere++;
-                  
+                
+                //cout << "\n" << entry->d_name << " : ";
                 snprintf(dirPath, sizeof(dirPath), "%s/%s", folderPath, entry->d_name);
                 
-                std::cout << "\n" << entry->d_name << " : ";
-                std::pair<int, int> aux = getFolderItemCount(dirPath);
+                dateHash aux = countItemsFolder(dirPath);
                 
-                nr_foldere += aux.first;
-                nr_fisiere += aux.second;
+                nr_foldere += aux.nr_foldere;
+                nr_fisiere += aux.nr_fisiere;
+                nr_verif += aux.fisiere_verif;
             }
-            else{
-                if(S_ISREG(statBuf.st_mode))
-                {
-                    std::cout << entry->d_name << ", ";
-                    nr_fisiere++;
-                }
-            }
+        }
     }
-    
+    else
+    {
+        std::cout << " precalculat" << folderPath  << "\n";
+        nr_fisiere = cache[folderPath].nr_fisiere;
+        nr_foldere = cache[folderPath].nr_foldere;
+        nr_verif = cache[folderPath].fisiere_verif;
+        
+    }
+    cache[folderPath].nr_foldere = nr_foldere;
+    cache[folderPath].nr_fisiere = nr_fisiere;
+    cache[folderPath].fisiere_verif = nr_verif;
+    cache[cache[folderPath].start_folder].fisiere_verif += nr_verif;
 
     // Close the directory
     closedir(dir);
-    std::cout << '\n';
+    cout << '\n';
 
-    return std::make_pair(nr_foldere, nr_fisiere);
+    return cache[folderPath];
 }
 
 
-
-void outputCurrentFolderPath()
+void Progress(const char *folderPath)
 {
-    char cwd[PATH_MAX];
-
-    if (getcwd(cwd, sizeof(cwd)) != NULL)
-        printf("Current working directory: %s\n", cwd);
-    else
-    {
-        perror("getcwd");
-        exit(EXIT_FAILURE);
-    }
+    cout << "verif: " << cache[folderPath].fisiere_verif << " total fisiere : " << cache[folderPath].nr_fisiere  << " total foldere : " << cache[folderPath].nr_foldere << '\n';
+    
+    //printf (" deja verif: %d , total: %d \n", cache[folderPath].fisiere_verif, cache[folderPath].nr_fisiere);
+    
 }
+
+void StartTask(const char *folderPath)
+{
+    cache[folderPath].start_folder = folderPath;
+    //aici pe threaduri separate
+    countItemsFolder(folderPath);
+    calculateFolderSize(folderPath);
+}
+
 
 int main()
 {
-    const char* s = "/mnt/c/Users/Lida Rani/dir/proiect/", *t = "/mnt/c/Users/Lida Rani/dir/", *p = "/mnt/c/Users/Lida Rani/dir/test";
-    calculateFolderSize(s), calculateFolderSize(p);
-    std::cout << calculateFolderSize(t) << '\n';
+    const char *s1 = "/Users/anastasiastefanescu/Documents/uf";
+    const char *s2= "/Users/anastasiastefanescu/Documents/uf/uf2";
+   
+    //printf("%lld foldere, %lld fisiere \n", getFolderItemCount(s).first, getFolderItemCount(s).second);
+    //printf("\n %lf GB \n", calculateFolderSize(s)/1000000);
+    
+    StartTask(s2);
+    
+    Progress(s1);
+    
+    StartTask(s1);
+    
+    Progress(s1);
+    return 0;
 }
+
+//atentie - obligatoriu cand CalculateSize ii dam CountItems, dar pe un thread separat(ca sa nu pierdem timpul) - pt ca vrem sa stim cat mai repede nr de fisiere, nr_foldere si cate fisiere au mai fost verificate in taskuri anterioare.
+
+//In CalculateSize, nu adaugam la nr_verificate daca am gasit un folder deja calculat - adaugam numai fisierele neparcurse pana acum
