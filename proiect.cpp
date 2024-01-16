@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <utility>
 #include <iostream>
+#include <unordered_map>
 using namespace std;
 
 struct dateHash
@@ -21,7 +22,7 @@ struct dateHash
     const char* start_folder;
 };
 
-std::unordered_map <string, dateHash> cache;
+unordered_map <string, dateHash> cache;
 
 //vector <string>
 
@@ -33,10 +34,8 @@ void initialize_cache(const char* folderPath,  struct stat statBuf)
     
     job_ID++;
     cache[folderPath].id = job_ID;
-    //cache[folderPath].size = 0;
     cache[folderPath].modified =statBuf.st_mtime;
     cache[folderPath].stare =  1;
-    
 }
 
 dateHash calculateFolderSize(const char* folderPath)
@@ -45,8 +44,6 @@ dateHash calculateFolderSize(const char* folderPath)
     struct dirent *entry;
     struct stat statBuf;
     int fisiere_verif = 0, totalFisiere_verif=0;
-    //int nr_foldere = 0, totalFoldere = 0;
-    //int nr_fisiere =0, totalFisiere = 0;
     long long totalSize = 0, size = 0;
 
     if ((dir = opendir(folderPath)) == NULL)
@@ -186,14 +183,40 @@ dateHash countItemsFolder(const char *folderPath)
     return cache[folderPath];
 }
 
-
+void isInTask(const char *folderPath)
+{
+    const char *lastSeparator = strrchr(folderPath, '/');
+        
+    if (lastSeparator != nullptr) 
+    {
+        // Calculate the length of the parent folder path
+        size_t parentPathLength = lastSeparator - folderPath;
+            
+        char parentFolderPath[PATH_MAX];
+            
+        // Copy the parent folder path
+        strncpy(parentFolderPath, folderPath, parentPathLength);
+            
+        // Null-terminate the string
+        parentFolderPath[parentPathLength] = '\0';
+            
+        // Display the parent folder path
+        std::cout << "Parent folder path: " << parentFolderPath << std::endl;
+            
+        // Don't forget to free the allocated memory
+       // delete[] parentFolderPath;
+    } else {
+            std::cerr << "Unable to find the parent folder." << std::endl;
+        }
+}
 void Progress(const char *folderPath)
 {
-    cout << "verif: " << cache[folderPath].fisiere_verif << " total fisiere : " << cache[folderPath].nr_fisiere  << " total foldere : " << cache[folderPath].nr_foldere << '\n';
+    cout << "dimensiune : " << cache[folderPath].size << "\n verif: " << cache[folderPath].fisiere_verif << " total fisiere : " << cache[folderPath].nr_fisiere  << " total foldere : " << cache[folderPath].nr_foldere << '\n';
     
     //printf (" deja verif: %d , total: %d \n", cache[folderPath].fisiere_verif, cache[folderPath].nr_fisiere);
     
 }
+
 
 void StartTask(const char *folderPath)
 {
